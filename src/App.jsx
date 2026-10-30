@@ -44,25 +44,32 @@ function App() {
   const [isPaused, setIsPaused] = useState(false);
   const [gameOver, setGameOver] = useState('');
   const [setupOpen, setSetupOpen] = useState(false);
-  const [moveTimer, setMoveTimer] = useState(DEFAULT_SETTINGS.moveLimit);
+  const [moveTimer, setMoveTimer] = useState({
+    red: DEFAULT_SETTINGS.moveLimit,
+    black: DEFAULT_SETTINGS.moveLimit,
+  });
   const lastTickRef = useRef(Date.now());
 
   const updateSettings = useCallback((newSettings) => {
+    const mainTime = Number(newSettings.mainTime);
+    const moveLimit = Number(newSettings.moveLimit);
+    const increment = Number(newSettings.increment);
+
     setSettings({
-      mainTime: Number(newSettings.mainTime) * 60,
-      moveLimit: Number(newSettings.moveLimit),
-      increment: Number(newSettings.increment),
+      mainTime: mainTime * 60,
+      moveLimit,
+      increment,
     });
     setTimeLeft({
-      red: Number(newSettings.mainTime) * 60,
-      black: Number(newSettings.mainTime) * 60,
+      red: mainTime * 60,
+      black: mainTime * 60,
     });
     setMoveCounts({ red: 0, black: 0 });
     setActiveSide('red');
     setIsRunning(false);
     setIsPaused(false);
     setGameOver('');
-    setMoveTimer(Number(newSettings.moveLimit));
+    setMoveTimer({ red: moveLimit, black: moveLimit });
     lastTickRef.current = Date.now();
   }, []);
 
@@ -81,7 +88,7 @@ function App() {
         [activeSide]: Math.max(0, previous[activeSide] + settings.increment),
       }));
       setActiveSide(nextSide);
-      setMoveTimer(settings.moveLimit > 0 ? settings.moveLimit : 0);
+      setMoveTimer({ red: settings.moveLimit, black: settings.moveLimit });
       lastTickRef.current = Date.now();
     },
     [activeSide, gameOver, settings.increment, settings.moveLimit]
@@ -168,20 +175,27 @@ function App() {
 
       if (settings.moveLimit > 0) {
         setMoveTimer((previous) => {
-          const nextValue = Math.max(0, previous - deltaSeconds);
+          const nextValue = Math.max(0, previous[activeSide] - deltaSeconds);
 
           if (nextValue <= 0) {
-            switchTurn();
-            return settings.moveLimit;
+            setIsRunning(false);
+            setGameOver(`${activeSide === 'red' ? 'Đỏ' : 'Đen'} hết giới hạn nước đi!`);
+            return {
+              ...previous,
+              [activeSide]: 0,
+            };
           }
 
-          return nextValue;
+          return {
+            ...previous,
+            [activeSide]: nextValue,
+          };
         });
       }
     }, 100);
 
     return () => clearInterval(interval);
-  }, [activeSide, gameOver, isPaused, isRunning, settings.moveLimit, switchTurn]);
+  }, [activeSide, gameOver, isPaused, isRunning, settings.moveLimit]);
 
   const sideLabel = {
     red: 'Đỏ',
@@ -217,6 +231,10 @@ function App() {
               const isActive = activeSide === side;
               const label = sideLabel[side];
               const sideColor = side === 'red' ? 'from-red-700 via-red-600 to-red-500' : 'from-slate-700 via-slate-700 to-slate-500';
+              const moveLimitProgress = settings.moveLimit > 0
+                ? Math.min(1, Math.max(0, moveTimer[side] / settings.moveLimit))
+                : 0;
+              const moveLimitCircumference = 2 * Math.PI * 25;
 
               return (
                 <button
@@ -239,22 +257,61 @@ function App() {
                       </div>
                     </div>
 
-                    <div className="flex flex-1 flex-col justify-center">
-                    <div className="mt-1 flex items-center justify-center whitespace-nowrap text-[clamp(1.7rem,6vw,5.2rem)] font-black leading-none tracking-tight text-white sm:rotate-0">
-                      <span className="inline-block rotate-90 sm:rotate-0">{formatClock(timeLeft[side])}</span>
+                    <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="inline-block rotate-90 whitespace-nowrap text-[clamp(1.7rem,6vw,5.2rem)] font-black leading-none tracking-tight text-white sm:rotate-0">
+                          {formatClock(timeLeft[side])}
+                        </span>
                       </div>
                     </div>
 
                     {settings.moveLimit > 0 && (
-                      <div className="rounded-xl border border-white/10 bg-black/10 p-2 backdrop-blur-sm sm:rounded-2xl sm:p-3">
+                      <div className="flex justify-center sm:hidden">
+                        <div className="relative flex h-16 w-16 items-center justify-center">
+                          <svg
+                            aria-hidden="true"
+                            className="-rotate-90 absolute inset-0 h-full w-full"
+                            viewBox="0 0 56 56"
+                          >
+                            <circle
+                              cx="28"
+                              cy="28"
+                              r="25"
+                              fill="none"
+                              stroke="rgba(255,255,255,0.2)"
+                              strokeWidth="3"
+                            />
+                            <circle
+                              cx="28"
+                              cy="28"
+                              r="25"
+                              fill="none"
+                              stroke="rgb(252,211,77)"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeDasharray={moveLimitCircumference}
+                              strokeDashoffset={moveLimitCircumference * (1 - moveLimitProgress)}
+                              className="transition-[stroke-dashoffset] duration-200"
+                            />
+                          </svg>
+                          <div className="relative z-10 text-center">
+                            <span className="block text-[7px] font-semibold uppercase tracking-wide text-white/65">Nước đi</span>
+                            <span className="block text-xs font-bold tabular-nums text-white">{formatClock(moveTimer[side])}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {settings.moveLimit > 0 && (
+                      <div className="hidden rounded-xl border border-white/10 bg-black/10 p-2 backdrop-blur-sm sm:block sm:rounded-2xl sm:p-3">
                         <div className="mb-1 flex items-center justify-between text-[7px] uppercase tracking-[0.14em] text-white/65 sm:text-[10px]">
                           <span>Move limit</span>
-                          <span className="rotate-90 sm:rotate-0">{formatClock(moveTimer)}</span>
+                          <span>{formatClock(moveTimer[side])}</span>
                         </div>
                         <div className="h-2 overflow-hidden rounded-full bg-white/10">
                           <div
                             className="h-full rounded-full bg-amber-300 transition-all duration-200"
-                            style={{ width: `${(moveTimer / settings.moveLimit) * 100}%` }}
+                            style={{ width: `${moveLimitProgress * 100}%` }}
                           />
                         </div>
                       </div>
