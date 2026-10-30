@@ -42,7 +42,7 @@ function App() {
   const [moveCounts, setMoveCounts] = useState({ red: 0, black: 0 });
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [gameOver, setGameOver] = useState('');
+  const [gameOver, setGameOver] = useState(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [moveTimer, setMoveTimer] = useState({
     red: DEFAULT_SETTINGS.moveLimit,
@@ -68,7 +68,7 @@ function App() {
     setActiveSide('red');
     setIsRunning(false);
     setIsPaused(false);
-    setGameOver('');
+    setGameOver(null);
     setMoveTimer({ red: moveLimit, black: moveLimit });
     lastTickRef.current = Date.now();
   }, []);
@@ -165,7 +165,10 @@ function App() {
         if (remaining <= 0) {
           next[activeSide] = 0;
           setIsRunning(false);
-          setGameOver(`${activeSide === 'red' ? 'Đỏ' : 'Đen'} đã hết giờ!`);
+          setGameOver((result) => result || {
+            loser: activeSide,
+            reason: 'Hết thời gian',
+          });
           return next;
         }
 
@@ -179,7 +182,10 @@ function App() {
 
           if (nextValue <= 0) {
             setIsRunning(false);
-            setGameOver(`${activeSide === 'red' ? 'Đỏ' : 'Đen'} hết giới hạn nước đi!`);
+            setGameOver((result) => result || {
+              loser: activeSide,
+              reason: 'Hết thời gian nước đi',
+            });
             return {
               ...previous,
               [activeSide]: 0,
@@ -201,6 +207,7 @@ function App() {
     red: 'Đỏ',
     black: 'Đen',
   };
+  const winner = gameOver ? (gameOver.loser === 'red' ? 'black' : 'red') : null;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#020617_60%)] text-white">
@@ -235,6 +242,7 @@ function App() {
                 ? Math.min(1, Math.max(0, moveTimer[side] / settings.moveLimit))
                 : 0;
               const moveLimitCircumference = 2 * Math.PI * 25;
+              const sideBorderPathLength = 100;
 
               return (
                 <button
@@ -246,6 +254,25 @@ function App() {
                   }`}
                 >
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.16),_transparent_55%)]" />
+                  {settings.moveLimit > 0 && (
+                    <svg
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 z-20 h-full w-full sm:hidden"
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
+                    >
+                      <path
+                        d="M50 1H80Q99 1 99 20V80Q99 99 80 99H20Q1 99 1 80V20Q1 1 20 1H50"
+                        fill="none"
+                        stroke="rgb(252,211,77)"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        pathLength={sideBorderPathLength}
+                        strokeDasharray={`${moveLimitProgress * sideBorderPathLength} ${sideBorderPathLength}`}
+                        style={{ transition: 'stroke-dasharray 100ms linear' }}
+                      />
+                    </svg>
+                  )}
                   <div className="relative z-10 flex h-full flex-col justify-between gap-2 sm:gap-3">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 sm:block">
@@ -291,7 +318,9 @@ function App() {
                               strokeLinecap="round"
                               strokeDasharray={moveLimitCircumference}
                               strokeDashoffset={moveLimitCircumference * (1 - moveLimitProgress)}
-                              className="transition-[stroke-dashoffset] duration-200"
+                              style={{
+                                transition: 'stroke-dashoffset 100ms linear',
+                              }}
                             />
                           </svg>
                           <div className="relative z-10 text-center">
@@ -439,6 +468,37 @@ function App() {
                 Áp dụng
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {gameOver && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/85 px-4 backdrop-blur-sm"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="game-over-title"
+          aria-describedby="game-over-reason"
+        >
+          <div className="w-full max-w-sm rounded-3xl border border-red-400/30 bg-slate-900 p-6 text-center shadow-2xl shadow-black/50">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-red-300">Trận đấu kết thúc</p>
+            <h2 id="game-over-title" className="mt-3 text-3xl font-black text-white">
+              Bên {sideLabel[gameOver.loser]} thua
+            </h2>
+            <p id="game-over-reason" className="mt-2 text-slate-300">
+              Lý do: {gameOver.reason}
+            </p>
+            <p className="mt-1 text-sm font-medium text-amber-300">
+              Bên {sideLabel[winner]} chiến thắng
+            </p>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-amber-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-amber-300"
+            >
+              <RefreshCcw size={18} />
+              Chơi ván mới
+            </button>
           </div>
         </div>
       )}
